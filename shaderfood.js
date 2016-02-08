@@ -12,7 +12,7 @@ function Canvas(id) {
   this.gl = canvas.getContext("webgl");
   this.vbos = {};
   this.ibos = {};
-  var ia = this.default_indices = new Int16Array(65536);
+  var ia = this.default_indices = new Uint16Array(65536);
   for (var i = 0; i != 65536; ++i) ia[i] = i;
   this.default_vertices = [-1, -1, 0,  0, 1, 0, 1, -1, 0];
 }
@@ -42,6 +42,7 @@ Canvas.prototype.clear = function(params) {
   }
 };
 
+//! map arrays of indices to ibo objects
 Canvas.prototype.get_ibo = function(indices) {
   if (!indices) indices = this.default_indices;
   var ibo = this.ibos[indices];
@@ -49,11 +50,13 @@ Canvas.prototype.get_ibo = function(indices) {
     var gl = this.gl;
     this.ibos[indices] = ibo = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Int16Array(indices), gl.STATIC_DRAW);
+    if (!(indices instanceof Uint16Array)) indices = new Uint16Array(indices);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
   }
   return ibo;
 }
 
+//! map arrays of vertices to vbo objects
 Canvas.prototype.get_vbo = function(vertices) {
   if (!vertices) vertices = this.default_vertices;
   var vbo = this.vbos[vertices];
@@ -61,7 +64,8 @@ Canvas.prototype.get_vbo = function(vertices) {
     var gl = this.gl;
     this.vbos[vertices] = vbo = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    if (!(vertices instanceof Float32Array)) vertices = new Float32Array(vertices)
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
   }
   return vbo;
 }
@@ -164,20 +168,20 @@ Shader.prototype.draw = function(params) {
 
     for (var u in this.uniforms) {
       var uval = this.uniforms[u];
-      var value = u in params ? params[u] : uval.default;
+      var value = u in params ? params[u] : this.infos[u][0];
       var loc = uval.loc;
       switch (uval.autype) {
         case gl.FLOAT: gl.uniform1f(loc, value); break;
-        case gl.FLOAT_VEC2: gl.uniform2fv(loc, value); break;
-        case gl.FLOAT_VEC3: gl.uniform3fv(loc, value); break;
-        case gl.FLOAT_VEC4: gl.uniform4fv(loc, value); break;
+        case gl.FLOAT_VEC2: gl.uniform2f(loc, value[0], value[1]); break;
+        case gl.FLOAT_VEC3: gl.uniform3f(loc, value[0], value[1], value[2]); break;
+        case gl.FLOAT_VEC4: gl.uniform4f(loc, value[0], value[1], value[2], value[3]); break;
         case gl.FLOAT_MAT2: gl.uniformMatrix2fv(loc, false, value); break;
         case gl.FLOAT_MAT3: gl.uniformMatrix3fv(loc, false, value); break;
         case gl.FLOAT_MAT4: gl.uniformMatrix4fv(loc, false, value); break;
         case gl.INT: gl.uniform1i(loc, value); break;
-        case gl.INT_VEC2: gl.uniform2iv(loc, value); break;
-        case gl.INT_VEC3: gl.uniform3iv(loc, value); break;
-        case gl.INT_VEC4: gl.uniform4iv(loc, value); break;
+        case gl.INT_VEC2: gl.uniform2i(loc, value[0], value[1]); break;
+        case gl.INT_VEC3: gl.uniform3i(loc, value[0], value[1], value[2]); break;
+        case gl.INT_VEC4: gl.uniform4i(loc, value[0], value[1], value[2], value[3]); break;
       }
     }
 
@@ -210,3 +214,41 @@ Shader.prototype.draw = function(params) {
     }
   }
 };
+
+function OFF_file(canvas, url, callback) {
+  var http = new XMLHttpRequest();
+  http.onreadystatechange = function() {
+    if (http.readyState == 4 && http.status == 200) {
+      var lines = http.responseText.split("\n");
+      if (lines[0] == 'OFF') {
+        var nums = lines[1].split(/\s+/);
+        var num_verts = parseInt(nums[0]);
+        var num_polys = parseInt(nums[1]);
+        var num_indices = parseInt(nums[2]);
+        var pos = new Float32Array(num_verts*3);
+        var pi = 0
+        for (var v = 0; v != num_verts; ++v) {
+          var xyz = lines[v+2].split(/\s+/);
+          pos[pi++] = parseFloat(xyz[0]);
+          pos[pi++] = parseFloat(xyz[1]);
+          pos[pi++] = parseFloat(xyz[2]);
+        }
+        var indices = new Uint16Array(num_indices);
+        var ii = 0;
+        for (var p = 0; p != num_polys; ++p) {
+          var poly = lines[p+num_verts+2].split(/\s+/);
+          var nv = parseInt(poly[0]);
+          for (var f = 0; f < nv-2; ++f) {
+            indices[ii++] = parseInt(poly[1]);
+            indices[ii++] = parseInt(poly[f+2]);
+            indices[ii++] = parseInt(poly[f+3]);
+          }
+        }
+        //console.log(indices.length, num_indices);
+      }
+      callback({pos: pos, indices: indices});
+    }
+  }
+  http.open("GET", url, true);
+  http.send();
+}
