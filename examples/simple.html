@@ -1,0 +1,23 @@
+<html>
+  <head>
+    <script src='../shaderfood.js'></script>
+  </head>
+  <body>
+    <canvas width=512 height=512 id='mycanvas'>
+      You should not see this!
+    </canvas>
+    <script>
+      /* global Canvas Shader */
+      var canvas = new Canvas("mycanvas");
+      var shader = new Shader(canvas, 'color.glsl');
+      setInterval(function() {
+        canvas.clear();
+
+        shader.draw({
+          pos: [-1, -1, 0,  0, 1, 0, 1, -1, 0],
+          color: [0, 0, 1, 1]
+        });
+      }, 500);
+    </script>
+  </body>
+</html>
