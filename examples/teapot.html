@@ -7,26 +7,27 @@
       You should not see this!
     </canvas>
     <script>
-      /* global Canvas Shader OFF_file */
+      /* global Canvas Shader Off Obj */
       var canvas = new Canvas("mycanvas");
-      var shader = new Shader(canvas, 'color.glsl');
+      var shader = new Shader(canvas, 'shaded.glsl');
 
-      // file from http://www.holmes3d.net/graphics/teapot/teapot.off
-      var model;
-      OFF_file(
+      var scene;
+
+      Obj(
         canvas,
-        'teapot.off',
-        function(m) {
-          m.color = [1, 0, 0, 1];
-          model = m;
+        'wt_teapot.obj', // obj file from http://goanna.cs.rmit.edu.au/~pknowles/models.html
+        function(s) {
+          scene = s;
         }
       );
 
       setInterval(function() {
         canvas.clear();
 
-        if (model) {
-          shader.draw(model);
+        if (scene) {
+          for (var m in scene) {
+            shader.draw(scene[m]);
+          }
         }
       }, 500);
     </script>

@@ -89,18 +89,19 @@ function Shader(canvas, url) {
     return shader;
   }
   
+  // return [default, simple type, size]
   function get_info(type, size) {
     switch(type) {
-      default: return 0;
-      case gl.FLOAT_VEC2: return [[0, 0], gl.FLOAT, 2];
-      case gl.FLOAT_VEC3: return [[0, 0, 0], gl.FLOAT, 3];
-      case gl.FLOAT_VEC4: return [[0, 0, 0, 1], gl.FLOAT, 4];
-      case gl.FLOAT_MAT2: return [[1, 0,  0, 1], gl.FLOAT, 4];
-      case gl.FLOAT_MAT3: return [[1, 0, 0,  0, 1, 0,  0, 0, 1], gl.FLOAT, 9];
-      case gl.FLOAT_MAT4: return [[1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1], gl.FLOAT, 16];
-      case gl.INT_VEC2: return [[0, 0], gl.INT, 2];
-      case gl.INT_VEC3: return [[0, 0, 0], gl.INT, 2];
-      case gl.INT_VEC4: return [[0, 0, 0, 1], gl.INT, 2];
+      default: return [0, type, size];
+      case gl.FLOAT_VEC2: return [[0, 0], gl.FLOAT, size*2];
+      case gl.FLOAT_VEC3: return [[0, 0, 0], gl.FLOAT, size*3];
+      case gl.FLOAT_VEC4: return [[0, 0, 0, 1], gl.FLOAT, size*4];
+      case gl.FLOAT_MAT2: return [[1, 0,  0, 1], gl.FLOAT, size*4];
+      case gl.FLOAT_MAT3: return [[1, 0, 0,  0, 1, 0,  0, 0, 1], gl.FLOAT, size*9];
+      case gl.FLOAT_MAT4: return [[1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1], gl.FLOAT, size*16];
+      case gl.INT_VEC2: return [[0, 0], gl.INT, size*2];
+      case gl.INT_VEC3: return [[0, 0, 0], gl.INT, size*2];
+      case gl.INT_VEC4: return [[0, 0, 0, 1], gl.INT, size*2];
     }
   }
   
@@ -157,14 +158,26 @@ function Shader(canvas, url) {
 
 //! Draw a model using this shader.
 Shader.prototype.draw = function(params) {
-  check = function() { if (gl.getError()) throw(gl.getError()); }
+  var get_opt = function(param, deflt) {
+    return params && param in params ? params[param] : deflt;
+  };
+
+  var enables = get_opt('enables', []);
+  var disables = get_opt('disables', []);
+
+  for (var e of enables) {
+    gl.enable(e);
+  }
+
+  for (var d of disables) {
+    gl.disable(d);
+  }
 
   if (this.program) {
     var gl = this.gl;
     var canvas = this.canvas;
 
     gl.useProgram(this.program);
-    check();
 
     for (var u in this.uniforms) {
       var uval = this.uniforms[u];
@@ -193,9 +206,7 @@ Shader.prototype.draw = function(params) {
         canvas.vbos[value] = vbo = canvas.get_vbo(value);
       }
       gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-      check();
       gl.vertexAttribPointer(val.loc, val.size, val.type, val.normalized, val.stride, 0);
-      check();
       gl.enableVertexAttribArray(val.loc);
     }
     
@@ -203,11 +214,9 @@ Shader.prototype.draw = function(params) {
     var ibo = canvas.get_ibo(params.indices);
     if (ibo) {
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
-      check();
     }
 
     gl.drawElements(gl.TRIANGLES, num_indices, gl.UNSIGNED_SHORT, 0);
-    check();
 
     for (var a in this.attributes) {
       gl.disableVertexAttribArray(this.attributes[a].loc);
@@ -215,28 +224,29 @@ Shader.prototype.draw = function(params) {
   }
 };
 
-function OFF_file(canvas, url, callback) {
+function Off(canvas, url, callback) {
   var http = new XMLHttpRequest();
   http.onreadystatechange = function() {
     if (http.readyState == 4 && http.status == 200) {
       var lines = http.responseText.split("\n");
-      if (lines[0] == 'OFF') {
-        var nums = lines[1].split(/\s+/);
+      var line = 0;
+      if (lines[line++] == 'OFF') {
+        var nums = lines[line++].split(/\s+/);
         var num_verts = parseInt(nums[0]);
         var num_polys = parseInt(nums[1]);
         var num_indices = parseInt(nums[2]);
         var pos = new Float32Array(num_verts*3);
         var pi = 0
         for (var v = 0; v != num_verts; ++v) {
-          var xyz = lines[v+2].split(/\s+/);
-          pos[pi++] = parseFloat(xyz[0]);
-          pos[pi++] = parseFloat(xyz[1]);
+          var xyz = lines[line++].split(/\s+/);
+          pos[pi++] = parseFloat(xyz[0]-0.5);
           pos[pi++] = parseFloat(xyz[2]);
+          pos[pi++] = parseFloat(xyz[1]);
         }
         var indices = new Uint16Array(num_indices);
         var ii = 0;
         for (var p = 0; p != num_polys; ++p) {
-          var poly = lines[p+num_verts+2].split(/\s+/);
+          var poly = lines[line++].split(/\s+/);
           var nv = parseInt(poly[0]);
           for (var f = 0; f < nv-2; ++f) {
             indices[ii++] = parseInt(poly[1]);
@@ -246,7 +256,112 @@ function OFF_file(canvas, url, callback) {
         }
         //console.log(indices.length, num_indices);
       }
-      callback({pos: pos, indices: indices});
+      callback({
+        main: {pos: pos, indices: indices}
+      });
+    }
+  }
+  http.open("GET", url, true);
+  http.send();
+}
+
+function Obj(canvas, url, callback) {
+  var vals;
+  var scene = {};
+  var obj_num = 0;
+
+  function reset() {
+    vals = { name: 'unnamed.' + obj_num++, v: [], vt: [], vp: [], vn: [], f: [], u: {}, ua: [] };
+  }
+  
+  function make_model() {
+    if (vals.v.length == 0) return;
+    
+    var pos = [];
+    var uvs = [];
+    var normals = [];
+    var ua = vals.ua;
+    var v_size = vals.v_size;
+    for (var i = 0; i != ua.length; ++i) {
+      var v = ua[i];
+      var r = /(\d*)\/?(\d*)\/?(\d*)/.exec(v);
+      var vi = parseInt(r[1])-1;
+      pos.push(vals.v[vi*3+0]);
+      pos.push(vals.v[vi*3+1]);
+      pos.push(vals.v[vi*3+2]);
+      if (r[2] != "") {
+        var vti = parseInt(r[2])-1;
+        uvs.push(vals.vt[vti*2+0]);
+        uvs.push(vals.vt[vti*2+1]);
+      }
+      if (r[3] != "") {
+        var vni = parseInt(r[3])-1;
+        normals.push(vals.vn[vni*3+0]);
+        normals.push(vals.vn[vni*3+1]);
+        normals.push(vals.vn[vni*3+2]);
+      }
+    }
+
+    var params = {
+      pos: new Float32Array(pos),
+      indices: new Uint16Array(vals.f),
+      diffuse: [0.5, 0.5, 0.5, 1],
+      specular: [0.5, 0.5, 0.5, 0.5],
+      shininess: 10,
+      light_dir: [1, 0, 0],
+      model_to_perspective: [1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1]
+    };
+
+    if (uvs.length) {
+      params.uv = new Float32Array(uvs);
+    }
+    if (normals.length) {
+      params.normal = new Float32Array(normals);
+    }
+    scene[vals.name] = params;
+  }
+  
+  var http = new XMLHttpRequest();
+  http.onreadystatechange = function() {
+    if (http.readyState == 4 && http.status == 200) {
+      var lines = http.responseText.split("\n");
+      var num_lines = lines.length;
+      var line = 0;
+      reset();
+      while (line < num_lines) {
+        var cur = lines[line++];
+        if (cur[0] == '#' || cur == '') continue;
+        var s = cur.split(/\s+/);
+        switch (s[0]) {
+          case '#': break;
+          case 'o': {
+            make_model();
+            reset();
+            vals.name = s[1];
+          } break;
+          case 'v': case 'vt': case 'vn': {
+            var v = vals[s[0]];
+            if (v.length == 0) vals[s[0]+'_size'] = s.length-1;
+            v.push(parseFloat(s[1]));
+            if (s.length > 2) v.push(parseFloat(s[2]));
+            if (s.length > 3) v.push(parseFloat(s[3]));
+          } break;
+          case 'f': {
+            //for (var i = 1; i != s.length; ++i) {
+            for (var i = 1; i != 4; ++i) {
+              if (!vals.u[s[i]]) {
+                vals.u[s[i]] = vals.ua.length;
+                vals.ua.push(s[i]);
+              }
+              vals.f.push(vals.u[s[i]]);
+            }
+            break;
+          }
+        }
+      }
+      make_model();
+
+      callback(scene);
     }
   }
   http.open("GET", url, true);
