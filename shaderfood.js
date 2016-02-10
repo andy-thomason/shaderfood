@@ -305,10 +305,13 @@ function Obj(canvas, url, callback) {
     var params = {
       pos: new Float32Array(pos),
       indices: new Uint16Array(vals.f),
-      diffuse: [0.5, 0.5, 0.5, 1],
-      specular: [0.5, 0.5, 0.5, 0.5],
+      ambient: [0.4, 0.4, 0.4],
+      diffuse: [0.5, 0.5, 0.5],
+      specular: [0.5, 0.5, 0.5],
       shininess: 10,
-      light_dir: [1, 0, 0],
+      alpha: 1.0,
+      light_pos: [3, 0, 0],
+      view_pos: [0, 0, 3],
       model_to_perspective: [1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1]
     };
 
