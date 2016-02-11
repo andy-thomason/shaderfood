@@ -224,7 +224,29 @@ Shader.prototype.draw = function(params) {
   }
 };
 
-function Off(canvas, url, callback) {
+Shader.default_material = function(dict) {
+  var params = {
+    ambient: [0.4, 0.4, 0.4],
+    diffuse: [0.5, 0.5, 0.5],
+    specular: [0.5, 0.5, 0.5],
+    shininess: 10,
+    alpha: 1.0,
+    // will be machine generated
+    light_pos: [3, 0, 0],
+    view_pos: [0, 0, 3],
+    model_to_perspective: [1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1]
+  };
+  
+  if (!dict) return params;
+  
+  for (var name in params) {
+    dict[name] = params[name];
+  }
+  
+  return dict;
+}
+
+function OffFile(canvas, url, callback) {
   var http = new XMLHttpRequest();
   http.onreadystatechange = function() {
     if (http.readyState == 4 && http.status == 200) {
@@ -265,7 +287,7 @@ function Off(canvas, url, callback) {
   http.send();
 }
 
-function Obj(canvas, url, callback) {
+function ObjFile(canvas, url, callback) {
   var vals;
   var scene = {};
   var obj_num = 0;
@@ -305,15 +327,9 @@ function Obj(canvas, url, callback) {
     var params = {
       pos: new Float32Array(pos),
       indices: new Uint16Array(vals.f),
-      ambient: [0.4, 0.4, 0.4],
-      diffuse: [0.5, 0.5, 0.5],
-      specular: [0.5, 0.5, 0.5],
-      shininess: 10,
-      alpha: 1.0,
-      light_pos: [3, 0, 0],
-      view_pos: [0, 0, 3],
-      model_to_perspective: [1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1]
     };
+    
+    Shader.default_material(params);
 
     if (uvs.length) {
       params.uv = new Float32Array(uvs);
@@ -370,3 +386,19 @@ function Obj(canvas, url, callback) {
   http.open("GET", url, true);
   http.send();
 }
+
+function BinFile(canvas, url, callback) {
+  var http = new XMLHttpRequest();
+  http.responseType = 'arraybuffer';
+  http.onreadystatechange = function() {
+    if (http.readyState == 4 && http.status == 200) {
+      var ints = new Int32Array(http.response);
+      var floats = new Float32Array(http.response);
+      var num_indices = ints[0];
+      var num_vertices = ints[1];
+    }
+  };
+  http.open("GET", url, true);
+  http.send();
+}
+

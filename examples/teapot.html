@@ -1,35 +1,37 @@
 <html>
   <head>
     <script src='../shaderfood.js'></script>
+    <script>
+      function onload() {
+        /* global Canvas Shader ObjFile */
+        var canvas = new Canvas("mycanvas");
+        var shader = new Shader(canvas, '../shaders/shaded.glsl');
+    
+        var scene;
+    
+        ObjFile(
+          canvas,
+          'wt_teapot.obj', // obj file from http://goanna.cs.rmit.edu.au/~pknowles/models.html
+          function(s) {
+            scene = s;
+          }
+        );
+    
+        setInterval(function() {
+          canvas.clear();
+    
+          if (scene) {
+            for (var m in scene) {
+              shader.draw(scene[m]);
+            }
+          }
+        }, 500);
+      }
+    </script>
   </head>
-  <body>
+  <body onload="onload();">
     <canvas width=512 height=512 id='mycanvas'>
       You should not see this!
     </canvas>
-    <script>
-      /* global Canvas Shader Off Obj */
-      var canvas = new Canvas("mycanvas");
-      var shader = new Shader(canvas, 'shaded.glsl');
-
-      var scene;
-
-      Obj(
-        canvas,
-        'wt_teapot.obj', // obj file from http://goanna.cs.rmit.edu.au/~pknowles/models.html
-        function(s) {
-          scene = s;
-        }
-      );
-
-      setInterval(function() {
-        canvas.clear();
-
-        if (scene) {
-          for (var m in scene) {
-            shader.draw(scene[m]);
-          }
-        }
-      }, 500);
-    </script>
   </body>
 </html>
