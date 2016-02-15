@@ -24,11 +24,11 @@ varying vec3 pos_;
 
   void main() {
     vec3 normal = normalize(normal_);
-    vec3 view_dir = normalize(view_pos - pos_);
-    vec3 light_dir = normalize(light_pos - pos_);
-    float diffuse_factor = max(0.0, dot(normal, -light_dir));
-    vec3 reflection = reflect(-light_dir, normal);
-    float specular_dot = max(0.0, -dot(reflection, view_dir));
+    vec3 view_ray = normalize(pos_ - view_pos);
+    vec3 incident = normalize(pos_ - light_pos);
+    float diffuse_factor = max(0.0, -dot(normal, incident));
+    vec3 reflection = reflect(incident, normal);
+    float specular_dot = max(0.0, dot(reflection, view_ray));
     float specular_factor = pow(specular_dot, shininess);
     gl_FragColor = vec4(
       ambient.xyz +
@@ -36,5 +36,6 @@ varying vec3 pos_;
       diffuse.xyz * diffuse_factor,
       alpha
     );
+    //gl_FragColor = vec4(diffuse_factor, 0, 0, 1);
   }
 #endif

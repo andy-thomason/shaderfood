@@ -216,7 +216,8 @@ Shader.prototype.draw = function(params) {
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
     }
 
-    gl.drawElements(gl.TRIANGLES, num_indices, gl.UNSIGNED_SHORT, 0);
+    var primitive  = get_opt('primitive', gl.TRIANGLES);
+    gl.drawElements(primitive, num_indices, gl.UNSIGNED_SHORT, 0);
 
     for (var a in this.attributes) {
       gl.disableVertexAttribArray(this.attributes[a].loc);
@@ -244,47 +245,6 @@ Shader.default_material = function(dict) {
   }
   
   return dict;
-}
-
-function OffFile(canvas, url, callback) {
-  var http = new XMLHttpRequest();
-  http.onreadystatechange = function() {
-    if (http.readyState == 4 && http.status == 200) {
-      var lines = http.responseText.split("\n");
-      var line = 0;
-      if (lines[line++] == 'OFF') {
-        var nums = lines[line++].split(/\s+/);
-        var num_verts = parseInt(nums[0]);
-        var num_polys = parseInt(nums[1]);
-        var num_indices = parseInt(nums[2]);
-        var pos = new Float32Array(num_verts*3);
-        var pi = 0
-        for (var v = 0; v != num_verts; ++v) {
-          var xyz = lines[line++].split(/\s+/);
-          pos[pi++] = parseFloat(xyz[0]-0.5);
-          pos[pi++] = parseFloat(xyz[2]);
-          pos[pi++] = parseFloat(xyz[1]);
-        }
-        var indices = new Uint16Array(num_indices);
-        var ii = 0;
-        for (var p = 0; p != num_polys; ++p) {
-          var poly = lines[line++].split(/\s+/);
-          var nv = parseInt(poly[0]);
-          for (var f = 0; f < nv-2; ++f) {
-            indices[ii++] = parseInt(poly[1]);
-            indices[ii++] = parseInt(poly[f+2]);
-            indices[ii++] = parseInt(poly[f+3]);
-          }
-        }
-        //console.log(indices.length, num_indices);
-      }
-      callback({
-        main: {pos: pos, indices: indices}
-      });
-    }
-  }
-  http.open("GET", url, true);
-  http.send();
 }
 
 function ObjFile(canvas, url, callback) {
@@ -392,11 +352,44 @@ function BinFile(canvas, url, callback) {
   http.responseType = 'arraybuffer';
   http.onreadystatechange = function() {
     if (http.readyState == 4 && http.status == 200) {
-      var ints = new Int32Array(http.response);
-      var floats = new Float32Array(http.response);
-      var num_indices = ints[0];
-      var num_vertices = ints[1];
+      var scene = {};
+      var num_models = 0;
+      var header = new Int32Array(http.response, 0, 2);
+      var num_indices = header[0];
+      var num_vertices = header[1];
+      var old_indices = new Int32Array(http.response, 8, num_indices);
+      var old_vertices = new Float32Array(http.response, 8 + num_indices*4, num_vertices);
+      var map = {};
+      var vsize = 0;
+      var indices = [];
+      var vertices = [];
+      for (var i = 0; i != num_indices; ++i) {
+        var idx = old_indices[i];
+        if (!(idx in map)) {
+            vertices.push(old_vertices[idx*3+0]*0.01);
+            vertices.push(old_vertices[idx*3+1]*0.01);
+            vertices.push(old_vertices[idx*3+2]*0.01+0.5);
+            map[idx] = vsize++;
+        }
+        indices.push(map[idx]);
+        if (vsize == 65536 || i == num_indices-1) {
+          var params = {
+            pos: new Float32Array(vertices),
+            indices: new Uint16Array(indices),
+            //primitive: canvas.gl.POINTS
+          };
+          
+          Shader.default_material(params);
+          scene['model' + num_models++] = params;
+          map = {};
+          vsize = 0;
+          indices = [];
+          vertices = [];
+        }
+      }
     }
+
+    callback(scene);
   };
   http.open("GET", url, true);
   http.send();
