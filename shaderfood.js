@@ -347,49 +347,80 @@ function ObjFile(canvas, url, callback) {
   http.send();
 }
 
+// See mesh.hpp in glslmath
 function BinFile(canvas, url, callback) {
   var http = new XMLHttpRequest();
   http.responseType = 'arraybuffer';
-  http.onreadystatechange = function() {
-    if (http.readyState == 4 && http.status == 200) {
-      var scene = {};
-      var num_models = 0;
-      var header = new Int32Array(http.response, 0, 2);
-      var num_indices = header[0];
-      var num_vertices = header[1];
-      var old_indices = new Int32Array(http.response, 8, num_indices);
-      var old_vertices = new Float32Array(http.response, 8 + num_indices*4, num_vertices);
-      var map = {};
-      var vsize = 0;
-      var indices = [];
-      var vertices = [];
-      for (var i = 0; i != num_indices; ++i) {
-        var idx = old_indices[i];
-        if (!(idx in map)) {
-            vertices.push(old_vertices[idx*3+0]*0.01);
-            vertices.push(old_vertices[idx*3+1]*0.01);
-            vertices.push(old_vertices[idx*3+2]*0.01+0.5);
-            map[idx] = vsize++;
-        }
-        indices.push(map[idx]);
-        if (vsize == 65536 || i == num_indices-1) {
-          var params = {
-            pos: new Float32Array(vertices),
-            indices: new Uint16Array(indices),
-            //primitive: canvas.gl.POINTS
-          };
-          
-          Shader.default_material(params);
-          scene['model' + num_models++] = params;
-          map = {};
-          vsize = 0;
-          indices = [];
-          vertices = [];
-        }
+  
+  var pos = 0;
+  var u8;
+  var u16;
+  var u32;
+  var f32;
+  var attr_name;
+  var params = {};
+  var mesh_name;
+  var scene = {};
+
+  function read_str() {
+    var res = "";
+    while (u8[pos]) {
+      res += String.fromCharCode(u8[pos++]);
+    }
+    pos++;
+    while (pos & 3) pos++;
+    return res;
+  }
+  
+  function read_u32() { var res = u32[pos/4]; pos += 4; return res; }
+
+  function read_chunk() {
+    var tag = read_str();
+    var len = read_u32();
+    var end = pos + len - 4;
+    console.log(tag);
+    if (tag < 'a') {
+      switch (tag) {
+        case 'MSH': {
+          params = {};
+        } break;
+      }
+      while (pos < end) {
+        read_chunk();
+      }
+      switch (tag) {
+        case 'MSH': {
+          scene[mesh_name] = params;
+        } break;
+      }
+    } else {
+      switch (tag) {
+        case 'msh': {
+          mesh_name = read_str();
+        } break;
+        case 'ix2': {
+          params.indices = new Uint16Array(u16.slice(pos/2, end/2));
+        } break;
+        case 'at1': {
+          attr_name = read_str();
+        } break;
+        case 'atd': {
+          params[attr_name] = new Float32Array(f32.slice(pos/4, end/4));
+        } break;
       }
     }
-
-    callback(scene);
+    pos = (end + 3) & -4;
+  }
+  
+  http.onreadystatechange = function() {
+    if (http.readyState == 4 && http.status == 200) {
+      u8 = new Uint8Array(http.response);
+      u16 = new Uint16Array(http.response);
+      u32 = new Uint32Array(http.response);
+      f32 = new Float32Array(http.response);
+      read_chunk();
+      callback(scene);
+    }
   };
   http.open("GET", url, true);
   http.send();
