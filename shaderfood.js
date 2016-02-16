@@ -3,6 +3,9 @@
 // (C) Andy Thomason 2016
 //
 
+// From gl-matrix.js 
+/* global mat4 vec4 vec3 */
+
 //! Create a WebGL canvas in an element with a certain id.
 function Canvas(id) {
   var canvas = this.canvas = document.getElementById(id);
@@ -30,6 +33,7 @@ Canvas.prototype.clear = function(params) {
   var enables = get_opt('enables', [gl.DEPTH_TEST]);
   var disables = get_opt('disables', []);
   var viewport = get_opt('viewport', [0, 0, gl.canvas.width, gl.canvas.height]);
+  this.viewport = viewport;
 
   gl.viewport(viewport[0], viewport[1], viewport[2], viewport[3]);
   gl.clearColor(cc[0], cc[1], cc[2], cc[3]);
@@ -232,6 +236,8 @@ Shader.default_material = function(dict) {
     specular: [0.5, 0.5, 0.5],
     shininess: 10,
     alpha: 1.0,
+    model_to_world: mat4.create(),
+
     // will be machine generated
     light_pos: [3, 0, 0],
     view_pos: [0, 0, 3],
@@ -390,6 +396,7 @@ function BinFile(canvas, url, callback) {
       }
       switch (tag) {
         case 'MSH': {
+          Shader.default_material(params);
           scene[mesh_name] = params;
         } break;
       }
@@ -400,12 +407,15 @@ function BinFile(canvas, url, callback) {
         } break;
         case 'ix2': {
           params.indices = new Uint16Array(u16.slice(pos/2, end/2));
+          //params.indices = [0, 1, 2];
         } break;
-        case 'at1': {
+        case 'atn': {
           attr_name = read_str();
         } break;
-        case 'atd': {
+        case 'atf': {
           params[attr_name] = new Float32Array(f32.slice(pos/4, end/4));
+          //params[attr_name] = new Float32Array(f32.slice(pos/4, (pos+36)/4));
+          //params[attr_name] = [-1, -1, 0, 0, 1, 0, 1, -1, 0]
         } break;
       }
     }
@@ -424,5 +434,37 @@ function BinFile(canvas, url, callback) {
   };
   http.open("GET", url, true);
   http.send();
+}
+
+function Camera(canvas) {
+  this.model_to_world = mat4.create();
+  this.znear =  0.1;
+  this.zfar = 1000;
+  this.yfov = 90 * (3.141592653/180);
+  this.canvas = canvas;
+  this.world_to_camera = mat4.create();
+  this.aspect = canvas.canvas.width / canvas.canvas.height;
+  this.camera_to_perspective = mat4.create();
+  this.model_to_perspective = mat4.create();
+  this.model_to_camera = mat4.create();
+}
+
+Camera.prototype.update = function() {
+  mat4.invert(this.world_to_camera, this.model_to_world);
+  mat4.perspective(this.camera_to_perspective, this.yfov, this.aspect, this.znear, this.zfar);
+}
+
+Camera.prototype.translate = function(v) {
+  mat4.translate(this.model_to_world, this.model_to_world, v);
+}
+
+Camera.prototype.set_params = function(params) {
+  this.update();
+  mat4.multiply(this.model_to_camera, this.world_to_camera, params.model_to_world);
+  mat4.multiply(params.model_to_perspective, this.camera_to_perspective, this.model_to_camera);
+
+  var tmp = vec3.create();
+  vec3.transformMat4(tmp, [0, 0, 0], params.model_to_perspective)
+  console.log("params.model_to_perspective [0, 0, 0] = " + tmp);
 }
 

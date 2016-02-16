@@ -1,14 +1,18 @@
 <html>
   <head>
+    <!-- https://github.com/toji/gl-matrix -->
+    <script src='../gl-matrix.js'></script>
     <script src='../shaderfood.js'></script>
     <script>
       function onload() {
-        /* global Canvas Shader ObjFile */
+        /* global Canvas Shader ObjFile glMatrix mat4 Camera */
         var canvas = new Canvas("mycanvas");
         var shader = new Shader(canvas, '../shaders/shaded.glsl');
-    
+        var camera = new Camera(canvas);
+        camera.translate([0, 0, 2]);
+
         var scene;
-    
+
         ObjFile(
           canvas,
           'wt_teapot.obj', // obj file from http://goanna.cs.rmit.edu.au/~pknowles/models.html
@@ -22,7 +26,9 @@
     
           if (scene) {
             for (var m in scene) {
-              shader.draw(scene[m]);
+              var params = scene[m];
+              camera.set_params(params);
+              shader.draw(params);
             }
           }
         }, 500);
