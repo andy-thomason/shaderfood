@@ -407,15 +407,17 @@ function BinFile(canvas, url, callback) {
         } break;
         case 'ix2': {
           params.indices = new Uint16Array(u16.slice(pos/2, end/2));
-          //params.indices = [0, 1, 2];
+        } break;
+        case 'ix4': {
+          params.indices = new Uint16Array(u32.slice(pos/4, end/4).values());
         } break;
         case 'atn': {
           attr_name = read_str();
+          console.log("attr=" + attr_name);
         } break;
-        case 'atf': {
+        case 'a3f': {
           params[attr_name] = new Float32Array(f32.slice(pos/4, end/4));
-          //params[attr_name] = new Float32Array(f32.slice(pos/4, (pos+36)/4));
-          //params[attr_name] = [-1, -1, 0, 0, 1, 0, 1, -1, 0]
+          console.log("len=" + params[attr_name].length);
         } break;
       }
     }
