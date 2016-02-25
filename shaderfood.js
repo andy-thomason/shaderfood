@@ -467,6 +467,6 @@ Camera.prototype.set_params = function(params) {
 
   var tmp = vec3.create();
   vec3.transformMat4(tmp, [0, 0, 0], params.model_to_perspective)
-  console.log("params.model_to_perspective [0, 0, 0] = " + tmp);
+  //console.log("params.model_to_perspective [0, 0, 0] = " + tmp);
 }
 
